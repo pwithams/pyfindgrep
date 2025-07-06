@@ -1,0 +1,13 @@
+[package]
+name = "findgrep"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.98"
+crossbeam-channel = "0.5.15"
+grep-matcher = "0.1.7"
+grep-regex = "0.1.13"
+grep-searcher = "0.1.14"
+ignore = "0.4.23"
+regex = "1.11.1"
