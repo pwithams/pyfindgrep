@@ -1,4 +1,5 @@
 from .pyfindgrep import findgrep_py
+from pyfindgrep.data import GrepResult, FindResult
 
 
 __doc__ = pyfindgrep.__doc__
@@ -17,7 +18,7 @@ def findgrep(
     filter_by_grep: bool = True,
     log_errors: bool = False,
     only_files: bool = True,
-):
+) -> list[FindResult]:
     """
     Searches for files with names and content matching patterns.
 
@@ -41,7 +42,7 @@ def findgrep(
     if parallel:
         threads = 0
 
-    return findgrep_py(
+    raw_results: list[dict] = findgrep_py(
         path,
         threads,
         ignore_hidden_files,
@@ -52,3 +53,7 @@ def findgrep(
         patterns,
         content_patterns,
     )
+    parsed_results: list[FindResult] = [
+        FindResult.from_raw_result(result) for result in raw_results
+    ]
+    return parsed_results

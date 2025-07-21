@@ -99,12 +99,17 @@ pub fn findgrep(
                 Ok(entry) => {
                     let path = entry.path();
                     if path.is_file() {
-                        if path_is_match(path, worker_find_patterns) {
+                        if worker_find_patterns.is_empty()
+                            || path_is_match(path, worker_find_patterns)
+                        {
                             let mut grep_results = Vec::new();
                             for matcher_info in worker_grep_patterns {
                                 grep_results.extend(grep_file(path, matcher_info));
                             }
-                            if !filter_by_grep || !grep_results.is_empty() {
+                            if !filter_by_grep
+                                || !grep_results.is_empty()
+                                || worker_grep_patterns.is_empty()
+                            {
                                 batch_sender.send(FindResult {
                                     path: path.to_path_buf(),
                                     path_type: "file".to_string(),
