@@ -11,4 +11,5 @@ test:
 
 check:
 	uv tool run ruff check --select E python
+	uv tool run ty check python
 	cargo clippy --workspace --all-targets --all-features -- -D warnings
