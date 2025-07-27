@@ -14,3 +14,4 @@ crate-type = ["cdylib"]
 [dependencies]
 pyo3 = "0.25.0"
 findgrep = { path = "crates/findgrep" }
+log = "0.4.27"

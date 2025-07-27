@@ -1,4 +1,5 @@
-use findgrep::{findgrep, FindResult, GrepResult};
+use findgrep::{findgrep, FindGrepConfig, FindResult, GrepResult};
+use log::warn;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -17,20 +18,21 @@ fn grep_result_to_py(grep_result: &GrepResult, py: Python) -> PyObject {
 
 fn find_result_to_py(find_result: &FindResult, py: Python) -> PyObject {
     let dict = PyDict::new(py);
-    dict.set_item("path", find_result.path.as_path().to_str().clone())
+    dict.set_item("path", find_result.path.as_path().to_str())
         .unwrap();
     dict.set_item("path_type", find_result.path_type.clone())
         .unwrap();
     let list = PyList::empty(py);
     for grep_result in &find_result.grep_results {
         if let Err(err) = list.append(grep_result_to_py(grep_result, py)) {
-            println!("{}", err);
+            warn!("{err}");
         }
     }
     dict.set_item("grep_results", list).unwrap();
     dict.into()
 }
 
+#[allow(clippy::too_many_arguments)]
 #[pyfunction]
 fn findgrep_py(
     py: Python<'_>,
@@ -40,21 +42,20 @@ fn findgrep_py(
     buffer_size: usize,
     log_errors: bool,
     only_files: bool,
-    filter_by_grep: bool,
-    match_patterns: Vec<String>,
-    content_patterns: Vec<String>,
+    find_patterns: Vec<String>,
+    grep_patterns: Vec<String>,
 ) -> PyResult<PyObject> {
-    match findgrep(
-        path,
+    let config = FindGrepConfig {
         threads,
         ignore_hidden,
         buffer_size,
         log_errors,
         only_files,
-        filter_by_grep,
-        match_patterns,
-        content_patterns,
-    ) {
+        find_patterns,
+        grep_patterns,
+    };
+
+    match findgrep(path, config) {
         Ok(find_results) => {
             let mut py_results = Vec::new();
             for find_result in find_results {
@@ -63,17 +64,14 @@ fn findgrep_py(
             let result_list = PyList::new(py, py_results)?;
             Ok(result_list.into())
         }
-        Err(err) => {
-            return Err(PyValueError::new_err(format!(
-                "Error occurred in libwalk call: {}",
-                err
-            )));
-        }
+        Err(err) => Err(PyValueError::new_err(format!(
+            "Error occurred in libwalk call: {err}"
+        ))),
     }
 }
 
 #[pymodule]
-fn pyfindgrep(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn pyfindgrep_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(findgrep_py, m)?)?;
     Ok(())
 }

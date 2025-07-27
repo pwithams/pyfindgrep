@@ -12,11 +12,12 @@ use grep_regex::RegexMatcher;
 use grep_searcher::Searcher;
 use grep_searcher::sinks::UTF8;
 use ignore::{WalkBuilder, WalkState};
+use log::warn;
 use regex::bytes::Regex;
 use std::path::Path;
 
-pub(crate) fn path_is_match(path: &Path, regex_patterns: &Vec<Regex>) -> bool {
-    regex_patterns.len() == 0
+pub(crate) fn path_is_match(path: &Path, regex_patterns: &[Regex]) -> bool {
+    regex_patterns.is_empty()
         || regex_patterns
             .iter()
             .any(|pat| pat.is_match(path.to_str().unwrap().as_bytes()))
@@ -40,24 +41,39 @@ pub(crate) fn grep_file(path: &Path, matcher_info: &RegexMatcherInfo) -> Vec<Gre
         }),
     );
     if let Err(err) = search_status {
-        println!("{}", err);
+        warn!("{err}");
     }
     results
 }
 
-pub fn findgrep(
-    path: String,
-    threads: usize,
-    ignore_hidden: bool,
-    buffer_size: usize,
-    log_errors: bool,
-    only_files: bool,
-    filter_by_grep: bool,
-    find_patterns: Vec<String>,
-    grep_patterns: Vec<String>,
-) -> Result<Vec<FindResult>> {
+pub struct FindGrepConfig {
+    pub threads: usize,
+    pub ignore_hidden: bool,
+    pub buffer_size: usize,
+    pub log_errors: bool,
+    pub only_files: bool,
+    pub find_patterns: Vec<String>,
+    pub grep_patterns: Vec<String>,
+}
+
+impl Default for FindGrepConfig {
+    fn default() -> FindGrepConfig {
+        FindGrepConfig {
+            threads: 0,
+            ignore_hidden: true,
+            buffer_size: 1024,
+            log_errors: false,
+            only_files: true,
+            find_patterns: vec![],
+            grep_patterns: vec![],
+        }
+    }
+}
+
+pub fn findgrep(path: String, config: FindGrepConfig) -> Result<Vec<FindResult>> {
+    // parse and validate regex patterns
     let mut find_regex_patterns = Vec::new();
-    for item in find_patterns {
+    for item in config.find_patterns {
         match Regex::new(&item) {
             Ok(regex) => {
                 find_regex_patterns.push(regex);
@@ -69,7 +85,7 @@ pub fn findgrep(
         }
     }
     let mut grep_regex_patterns = Vec::new();
-    for item in grep_patterns {
+    for item in config.grep_patterns {
         match RegexMatcher::new(&item) {
             Ok(regex) => {
                 grep_regex_patterns.push(RegexMatcherInfo {
@@ -85,13 +101,13 @@ pub fn findgrep(
     }
 
     let walker = WalkBuilder::new(path)
-        .hidden(ignore_hidden)
-        .threads(threads)
+        .hidden(config.ignore_hidden)
+        .threads(config.threads)
         .build_parallel();
 
     let (tx, rx): (Sender<Vec<FindResult>>, Receiver<Vec<FindResult>>) = unbounded();
     walker.run(|| {
-        let mut batch_sender = BatchSender::new(tx.clone(), buffer_size);
+        let mut batch_sender = BatchSender::new(tx.clone(), config.buffer_size);
         let worker_find_patterns = &find_regex_patterns;
         let worker_grep_patterns = &grep_regex_patterns;
         Box::new(move |entry_result| {
@@ -106,32 +122,25 @@ pub fn findgrep(
                             for matcher_info in worker_grep_patterns {
                                 grep_results.extend(grep_file(path, matcher_info));
                             }
-                            if !filter_by_grep
-                                || !grep_results.is_empty()
-                                || worker_grep_patterns.is_empty()
-                            {
+                            if !grep_results.is_empty() || worker_grep_patterns.is_empty() {
                                 batch_sender.send(FindResult {
                                     path: path.to_path_buf(),
                                     path_type: "file".to_string(),
-                                    grep_results: grep_results,
+                                    grep_results,
                                 });
                             }
                         }
-                    } else {
-                        if !only_files {
-                            if path_is_match(path, worker_find_patterns) {
-                                batch_sender.send(FindResult {
-                                    path: path.to_path_buf(),
-                                    path_type: "directory".to_string(),
-                                    grep_results: Vec::new(),
-                                });
-                            }
-                        }
+                    } else if !config.only_files && path_is_match(path, worker_find_patterns) {
+                        batch_sender.send(FindResult {
+                            path: path.to_path_buf(),
+                            path_type: "directory".to_string(),
+                            grep_results: Vec::new(),
+                        });
                     }
                 }
                 Err(err) => {
-                    if log_errors {
-                        println!("Error: {}", err);
+                    if config.log_errors {
+                        println!("Error: {err}");
                     }
                 }
             };
@@ -155,7 +164,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
-        assert_eq!(4, 4);
+    fn path_is_match_single_pattern() {
+        let path = Path::new("/tmp/some/path.txt");
+        let pattern = Regex::new(".*.txt").unwrap();
+        let patterns = vec![pattern];
+        let is_match = path_is_match(path, &patterns);
+        assert!(is_match);
+    }
+
+    #[test]
+    fn path_is_match_no_patterns() {
+        let path = Path::new("/tmp/some/path.txt");
+        let patterns = vec![];
+        let is_match = path_is_match(path, &patterns);
+        assert!(is_match);
+    }
+
+    #[test]
+    fn path_is_match_pattern_miss() {
+        let path = Path::new("/tmp/some/path.txt");
+        let pattern = Regex::new(".*.py").unwrap();
+        let patterns = vec![pattern];
+        let is_match = path_is_match(path, &patterns);
+        assert!(!is_match);
     }
 }

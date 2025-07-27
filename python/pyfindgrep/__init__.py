@@ -1,21 +1,15 @@
-from .pyfindgrep import findgrep_py
+from pyfindgrep.pyfindgrep_lib import findgrep_py
 from pyfindgrep.data import GrepResult, FindResult
-
-
-__doc__ = pyfindgrep.__doc__
-if hasattr(pyfindgrep, "__all__"):
-    __all__ = pyfindgrep.__all__
 
 
 def findgrep(
     path: str,
-    patterns: list[str] | None = None,
-    content_patterns: list[str] | None = None,
+    find_patterns: list[str] | None = None,
+    grep_patterns: list[str] | None = None,
     parallel: bool | None = None,
     threads: int | None = None,
     ignore_hidden_files: bool = True,
     buffer_size: int = 1024,
-    filter_by_grep: bool = True,
     log_errors: bool = False,
     only_files: bool = True,
 ) -> list[FindResult]:
@@ -23,22 +17,26 @@ def findgrep(
     Searches for files with names and content matching patterns.
 
     Similar to running find with grep.
+
+    An find empty pattern list will match all files, and an empty grep pattern list
+    will match all file contents.
     """
-    if patterns and len(patterns) == 0:
-        raise ValueError("Providing an empty list of patterns will produce no results")
+    # match all files if no patterns are specified
+    if find_patterns is None:
+        find_patterns = []
 
-    if patterns is None:
-        patterns = []
-
-    if content_patterns is None:
-        content_patterns = []
+    # match all file contents if no patterns are specified
+    if grep_patterns is None:
+        grep_patterns = []
 
     if parallel is not None and threads is not None:
         raise ValueError("Only specify one of threads or parallel")
 
+    # default to single thread if no threads are specified
     if threads is None:
         threads = 1
 
+    # auto-detect threads if parallel is specified
     if parallel:
         threads = 0
 
@@ -49,9 +47,8 @@ def findgrep(
         buffer_size,
         log_errors,
         only_files,
-        filter_by_grep,
-        patterns,
-        content_patterns,
+        find_patterns,
+        grep_patterns,
     )
     parsed_results: list[FindResult] = [
         FindResult.from_raw_result(result) for result in raw_results

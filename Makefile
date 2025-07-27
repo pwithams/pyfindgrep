@@ -5,12 +5,10 @@ format:
 	cargo fmt
 	uv tool run ruff format python
 
-pytest:
-	uv run pytest
-
 test:
-	cargo test
-
-test_all:
 	cargo test --workspace
 	uv run pytest
+
+check:
+	uv tool run ruff check --select E python
+	cargo clippy --workspace --all-targets --all-features -- -D warnings

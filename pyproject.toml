@@ -11,13 +11,12 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dynamic = ["version"]
-[project.optional-dependencies]
-tests = [
-    "pytest",
-]
+
 [tool.maturin]
-python-source = "python"
+module-name = "pyfindgrep.pyfindgrep_lib"
 features = ["pyo3/extension-module"]
+python-source = "python"
+
 
 [dependency-groups]
 dev = [

@@ -1,4 +1,5 @@
 use crossbeam_channel::Sender;
+use log::warn;
 
 pub(crate) struct BatchSender<T>
 where
@@ -35,7 +36,7 @@ where
 
     fn send_buffer(&mut self) -> bool {
         if let Err(err) = self.tx.send(self.buffer.clone()) {
-            println!("{}", err);
+            warn!("{err}");
             return false;
         }
         self.buffer = Vec::with_capacity(self.limit);
@@ -48,10 +49,8 @@ where
     T: Clone,
 {
     fn drop(&mut self) {
-        if !self.buffer.is_empty() {
-            if !self.send_buffer() {
-                println!("Failed to clear buffer during drop");
-            }
+        if !self.buffer.is_empty() && !self.send_buffer() {
+            println!("Failed to clear buffer during drop");
         }
     }
 }
